@@ -1,0 +1,37 @@
+name: CI
+
+# Every pull request, including stacked ones that target another PR's branch.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+# A new push to the same PR cancels the run it replaces.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint and repository checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      # Valid notebooks with outputs cleared; no datasets, runs or weights
+      - name: Repository checks
+        run: python scripts/check_repo.py
