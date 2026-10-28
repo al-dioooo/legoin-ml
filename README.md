@@ -67,4 +67,4 @@ Weights are published as [GitHub Releases](https://github.com/al-dioooo/legoin-m
 
 ## Contributing
 
-Follow the [legoin-docs guidelines](https://github.com/al-dioooo/legoin-docs/tree/main/guidelines): work on a branch, write Conventional Commits, and merge through a pull request linked to an issue. Clear notebook outputs before committing.
+Read [AGENTS.md](AGENTS.md) before opening a pull request. It summarizes the [legoin-docs guidelines](https://github.com/al-dioooo/legoin-docs/tree/main/guidelines) for this repository: work on a branch, write Conventional Commits, merge through a pull request linked to an issue, and clear notebook outputs before committing.
