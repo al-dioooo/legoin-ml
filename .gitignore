@@ -1,0 +1,12 @@
+.DS_Store
+__pycache__/
+.ipynb_checkpoints/
+.venv/
+.env
+
+# Datasets, training runs and weights are downloaded or released, never committed
+data/
+runs/
+*.pt
+*.onnx
+*.zip
