@@ -8,6 +8,16 @@ A Legoin scan runs in stages:
 2. **Part classification** names each cropped brick. Planned.
 3. **Color** reads each brick's color from its crop. Planned.
 
+## Checks
+
+```bash
+pip install -r requirements-dev.txt
+ruff check .
+python scripts/check_repo.py
+```
+
+`check_repo.py` fails when a notebook is invalid or still holds outputs, or when data or weights are in the repository. `python scripts/check_repo.py --fix` clears notebook outputs in place. CI runs both commands on every pull request.
+
 ## Environment variables
 
 None. The notebooks need no keys or tokens.
