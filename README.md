@@ -5,7 +5,7 @@ The models behind Legoin: notebooks that train and evaluate them, and the weight
 A Legoin scan runs in stages:
 
 1. **Detection** finds every brick in one photo with YOLO11 and a single `lego` class. The box count is the first inventory.
-2. **Part classification** names each cropped brick. Planned.
+2. **Part classification** names each cropped brick as one of the 13 catalogue parts with MobileNetV3-Large, or flags it for checking.
 3. **Color** reads each brick's color from its crop as one of the 10 catalogue colors, or flags it for checking.
 
 ## Notebooks
@@ -13,6 +13,7 @@ A Legoin scan runs in stages:
 | Notebook | What it does |
 | --- | --- |
 | [01-yolo11-brick-detection](notebooks/01-yolo11-brick-detection.ipynb) [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/al-dioooo/legoin-ml/blob/main/notebooks/01-yolo11-brick-detection.ipynb) | Stage 1. Converts the dataset's PASCAL VOC boxes to YOLO labels, trains YOLO11n, reports mAP, precision and recall on the test split, checks how well the box count matches the real brick count, and saves brick crops for stage 2. |
+| [02-mobilenetv3-part-classification](notebooks/02-mobilenetv3-part-classification.ipynb) [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/al-dioooo/legoin-ml/blob/main/notebooks/02-mobilenetv3-part-classification.ipynb) | Stage 2. Downloads only the 13 catalogue parts and a sample of other parts from the classification dataset, fine-tunes MobileNetV3-Large with an extra `other` output, calibrates confidence on val, reports top-1 accuracy on held-out real photos, and exports the weights with a label map that uses the API contract's part ids. |
 | [03-kmeans-cielab-brick-color](notebooks/03-kmeans-cielab-brick-color.ipynb) [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/al-dioooo/legoin-ml/blob/main/notebooks/03-kmeans-cielab-brick-color.ipynb) | Stage 3. Separates the brick from its background with K-Means in CIELAB and names its color by the nearest catalogue reference (CIEDE2000), flagging colors outside the catalogue. It evaluates on renders whose file names carry their color, evaluates the team's labeled phone crops when they exist, and saves the color parameters for the backend. Runs on a CPU. |
 
 The notebooks are written in Indonesian, since they double as coursework for Visual Komputer Cerdas at IPB University.
@@ -25,16 +26,21 @@ Stage 1 trains on *Tagged images with LEGO bricks*: 2,933 photos holding 1 to 32
 
 The dataset is licensed CC BY 4.0, so anything built on it credits the source. The notebook downloads the zip (about 6 GB) itself; the data is never committed.
 
-Stage 3 starts from Rebrickable's RGB values for the 10 catalogue colors (<https://rebrickable.com/colors/>). It tests the method on the renders of *LEGO bricks for training classification network*, whose file names carry the brick's LEGO color name.
+Stage 2 trains on *LEGO bricks for training classification network*: 447 part types in folders named by LEGO design id, with about 53,000 real photos and 568,000 renders, all single bricks on a white background.
 
 > Boiński, T. M., Zaraziński, S., & Śledź, B. (2021). *LEGO bricks for training classification network* (version 1.1). MOST Wiedzy, Gdańsk University of Technology. <https://doi.org/10.34808/rcza-jy08>
 
-It is licensed CC BY 4.0. The notebook downloads only the folders it uses, over HTTP range requests. No public dataset labels real photos with the catalogue colors, so color accuracy on phone photos needs crops the team labels itself; notebook 03 explains how.
+It is licensed CC BY 4.0. Its zip is 6 GB, but the notebook reads the zip's index over HTTP range requests and downloads only the folders it uses, about 350 MB. Its real photos are studio shots, so they don't measure accuracy on phone photos; the notebook explains how the team can label its own crops for that.
+
+*B200C LEGO Classification* (Kaggle, CC BY-SA 4.0) is a documented option in notebook 02 and isn't used by default, because downloading it needs a Kaggle account.
+
+Stage 3 starts from Rebrickable's RGB values for the 10 catalogue colors (<https://rebrickable.com/colors/>). It tests the method on the renders of the same *LEGO bricks for training classification network* (CC BY 4.0, cited above), whose file names carry the brick's LEGO color name, and downloads only the folders it uses. No public dataset labels real photos with the catalogue colors, so color accuracy on phone photos needs crops the team labels itself; notebook 03 explains how.
 
 ## Tech stack
 
 - Python 3.12
 - [Ultralytics](https://docs.ultralytics.com) 8.4.190 (YOLO11) on PyTorch
+- PyTorch 2.15.0 and torchvision 0.29.2 for MobileNetV3-Large (stage 2)
 - scikit-image 0.26.0 and scikit-learn 1.9.1 for K-Means and CIELAB color matching (stage 3)
 - pandas, matplotlib and Pillow for data exploration
 - Google Colab with a T4 GPU for training
@@ -44,7 +50,7 @@ It is licensed CC BY 4.0. The notebook downloads only the folders it uses, over 
 
 **Colab (recommended).** Open a notebook from its badge, pick *Runtime → Change runtime type → T4 GPU*, then *Run all*. Data goes to the Colab disk. Training runs and the best weights are saved to Google Drive under `MyDrive/VISKOM_Kelompok5`.
 
-**Locally.** Needs Python 3.12 and, for a full training run, an NVIDIA GPU.
+**Locally.** Needs Python 3.12. A full training run is fastest on an NVIDIA GPU, but a CPU works too: `v0.1.0` trained 35 epochs in about 4 hours on a 16-vCPU server.
 
 ```bash
 python -m venv .venv
@@ -67,11 +73,21 @@ python scripts/check_repo.py
 
 ## Environment variables
 
-None. The notebooks need no keys or tokens.
+None by default; the notebooks need no keys or tokens.
+
+| Variable | Used for |
+| --- | --- |
+| `KAGGLE_USERNAME`, `KAGGLE_KEY` | Optional. Only to add B200C to stage 2 training by hand. On Colab, store them as Colab secrets; never write them in a notebook. |
 
 ## Model releases
 
-Weights are published as [GitHub Releases](https://github.com/al-dioooo/legoin-ml/releases), never committed. Each release carries the `.pt` file, the training config and the test metrics: mAP@50, mAP@50-95, precision, recall and count MAE. The color step has no weights; its parameters file, `legoin_warna.json`, ships in a release the same way. There are none yet; the first full training run on Colab becomes `v0.1.0`.
+Weights are published as [GitHub Releases](https://github.com/al-dioooo/legoin-ml/releases), never committed. Each release carries the `.pt` file, the training config and the test metrics: mAP@50, mAP@50-95, precision, recall and count MAE for the detector. A part classifier release also carries `legoin_mobilenetv3_part_labels.json`, which gives the class order, input size, normalization and confidence temperature the backend must use, and reports top-1 accuracy with the kind of photos it was measured on. The color step has no weights; its parameters file, `legoin_warna.json`, ships in a release the same way. The backend pins a release tag and predicts with the image size and confidence threshold given in its notes.
+
+| Release | Model | Trained | Test mAP@50 | Test count MAE | `imgsz` | `conf` |
+| --- | --- | --- | --- | --- | --- | --- |
+| [v0.1.0](https://github.com/al-dioooo/legoin-ml/releases/tag/v0.1.0) | YOLO11n, 1 class | 35 epochs on a CPU server, 4.1 h | 0.992 | 0.055 | 640 | 0.65 |
+
+The PRD targets are mAP@50 ≥ 0.85 and a count MAE of at most 1 brick per photo.
 
 ## Contributing
 
