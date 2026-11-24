@@ -46,7 +46,7 @@ It is licensed CC BY 4.0. Its zip is 6 GB, but the notebook reads the zip's inde
 
 **Colab (recommended).** Open a notebook from its badge, pick *Runtime → Change runtime type → T4 GPU*, then *Run all*. Data goes to the Colab disk. Training runs and the best weights are saved to Google Drive under `MyDrive/VISKOM_Kelompok5`.
 
-**Locally.** Needs Python 3.12 and, for a full training run, an NVIDIA GPU.
+**Locally.** Needs Python 3.12. A full training run is fastest on an NVIDIA GPU, but a CPU works too: `v0.1.0` trained 35 epochs in about 4 hours on a 16-vCPU server.
 
 ```bash
 python -m venv .venv
@@ -77,7 +77,13 @@ None by default; the notebooks need no keys or tokens.
 
 ## Model releases
 
-Weights are published as [GitHub Releases](https://github.com/al-dioooo/legoin-ml/releases), never committed. Each release carries the `.pt` file, the training config and the test metrics: mAP@50, mAP@50-95, precision, recall and count MAE for the detector. A part classifier release also carries `legoin_mobilenetv3_part_labels.json`, which gives the class order, input size, normalization and confidence temperature the backend must use, and reports top-1 accuracy with the kind of photos it was measured on. There are none yet; the first full training run on Colab becomes `v0.1.0`.
+Weights are published as [GitHub Releases](https://github.com/al-dioooo/legoin-ml/releases), never committed. Each release carries the `.pt` file, the training config and the test metrics: mAP@50, mAP@50-95, precision, recall and count MAE for the detector. A part classifier release also carries `legoin_mobilenetv3_part_labels.json`, which gives the class order, input size, normalization and confidence temperature the backend must use, and reports top-1 accuracy with the kind of photos it was measured on. The backend pins a release tag and predicts with the image size and confidence threshold given in its notes.
+
+| Release | Model | Trained | Test mAP@50 | Test count MAE | `imgsz` | `conf` |
+| --- | --- | --- | --- | --- | --- | --- |
+| [v0.1.0](https://github.com/al-dioooo/legoin-ml/releases/tag/v0.1.0) | YOLO11n, 1 class | 35 epochs on a CPU server, 4.1 h | 0.992 | 0.055 | 640 | 0.65 |
+
+The PRD targets are mAP@50 ≥ 0.85 and a count MAE of at most 1 brick per photo.
 
 ## Contributing
 
