@@ -5,7 +5,7 @@ The models behind Legoin: notebooks that train and evaluate them, and the weight
 A Legoin scan runs in stages:
 
 1. **Detection** finds every brick in one photo with YOLO11 and a single `lego` class. The box count is the first inventory.
-2. **Part classification** names each cropped brick. Planned.
+2. **Part classification** names each cropped brick as one of the 13 catalogue parts with MobileNetV3-Large, or flags it for checking.
 3. **Color** reads each brick's color from its crop. Planned.
 
 ## Notebooks
@@ -13,6 +13,7 @@ A Legoin scan runs in stages:
 | Notebook | What it does |
 | --- | --- |
 | [01-yolo11-brick-detection](notebooks/01-yolo11-brick-detection.ipynb) [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/al-dioooo/legoin-ml/blob/main/notebooks/01-yolo11-brick-detection.ipynb) | Stage 1. Converts the dataset's PASCAL VOC boxes to YOLO labels, trains YOLO11n, reports mAP, precision and recall on the test split, checks how well the box count matches the real brick count, and saves brick crops for stage 2. |
+| [02-mobilenetv3-part-classification](notebooks/02-mobilenetv3-part-classification.ipynb) [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/al-dioooo/legoin-ml/blob/main/notebooks/02-mobilenetv3-part-classification.ipynb) | Stage 2. Downloads only the 13 catalogue parts and a sample of other parts from the classification dataset, fine-tunes MobileNetV3-Large with an extra `other` output, calibrates confidence on val, reports top-1 accuracy on held-out real photos, and exports the weights with a label map that uses the API contract's part ids. |
 
 The notebooks are written in Indonesian, since they double as coursework for Visual Komputer Cerdas at IPB University.
 
@@ -24,10 +25,19 @@ Stage 1 trains on *Tagged images with LEGO bricks*: 2,933 photos holding 1 to 32
 
 The dataset is licensed CC BY 4.0, so anything built on it credits the source. The notebook downloads the zip (about 6 GB) itself; the data is never committed.
 
+Stage 2 trains on *LEGO bricks for training classification network*: 447 part types in folders named by LEGO design id, with about 53,000 real photos and 568,000 renders, all single bricks on a white background.
+
+> Boiński, T. M., Zaraziński, S., & Śledź, B. (2021). *LEGO bricks for training classification network* (version 1.1). MOST Wiedzy, Gdańsk University of Technology. <https://doi.org/10.34808/rcza-jy08>
+
+It is licensed CC BY 4.0. Its zip is 6 GB, but the notebook reads the zip's index over HTTP range requests and downloads only the folders it uses, about 350 MB. Its real photos are studio shots, so they don't measure accuracy on phone photos; the notebook explains how the team can label its own crops for that.
+
+*B200C LEGO Classification* (Kaggle, CC BY-SA 4.0) is a documented option in notebook 02 and isn't used by default, because downloading it needs a Kaggle account.
+
 ## Tech stack
 
 - Python 3.12
 - [Ultralytics](https://docs.ultralytics.com) 8.4.190 (YOLO11) on PyTorch
+- PyTorch 2.15.0 and torchvision 0.29.2 for MobileNetV3-Large (stage 2)
 - pandas, matplotlib and Pillow for data exploration
 - Google Colab with a T4 GPU for training
 - [Ruff](https://docs.astral.sh/ruff/) for linting and nbformat for notebook checks
@@ -59,11 +69,15 @@ python scripts/check_repo.py
 
 ## Environment variables
 
-None. The notebooks need no keys or tokens.
+None by default; the notebooks need no keys or tokens.
+
+| Variable | Used for |
+| --- | --- |
+| `KAGGLE_USERNAME`, `KAGGLE_KEY` | Optional. Only to add B200C to stage 2 training by hand. On Colab, store them as Colab secrets; never write them in a notebook. |
 
 ## Model releases
 
-Weights are published as [GitHub Releases](https://github.com/al-dioooo/legoin-ml/releases), never committed. Each release carries the `.pt` file, the training config and the test metrics: mAP@50, mAP@50-95, precision, recall and count MAE. The backend pins a release tag and predicts with the image size and confidence threshold given in its notes.
+Weights are published as [GitHub Releases](https://github.com/al-dioooo/legoin-ml/releases), never committed. Each release carries the `.pt` file, the training config and the test metrics: mAP@50, mAP@50-95, precision, recall and count MAE for the detector. A part classifier release also carries `legoin_mobilenetv3_part_labels.json`, which gives the class order, input size, normalization and confidence temperature the backend must use, and reports top-1 accuracy with the kind of photos it was measured on. The backend pins a release tag and predicts with the image size and confidence threshold given in its notes.
 
 | Release | Model | Trained | Test mAP@50 | Test count MAE | `imgsz` | `conf` |
 | --- | --- | --- | --- | --- | --- | --- |
