@@ -13,14 +13,19 @@ upright photo in memory, so they're what the app would have shown:
 The labeling page never receives these columns.
 """
 
+import json
 import warnings
+from pathlib import Path
 
 import numpy as np
-from PIL import Image
+import torch
+import torchvision
+import torchvision.transforms.functional as TF
+from PIL import Image, ImageOps
 from skimage.color import deltaE_ciede2000, rgb2lab
 from sklearn.cluster import KMeans
 
-from .catalogue import COLORS, PARTS
+from .catalogue import COLORS, OTHER, PARTS
 
 CLASSIFIER = "legoin_mobilenetv3_part.pt"
 LABEL_MAP = "legoin_mobilenetv3_part_labels.json"
@@ -77,3 +82,38 @@ def name_colors(lab: np.ndarray, p: dict) -> tuple[list[str], np.ndarray]:
     neutral = np.hypot(ref[i, 1], ref[i, 2]) < p["neutral_chroma"]
     foreign = (d.min(1) > p["max_delta_e"]) | ((chroma >= p["neutral_chroma"]) & neutral)
     return [p["colors"][k] for k in i], np.where(foreign, np.minimum(prob.max(1), 0.5), prob.max(1))
+
+
+class Predictor:
+    def __init__(self, files: dict[str, Path]):
+        self.labels = json.loads(files[LABEL_MAP].read_text())
+        self.colors = json.loads(files[COLOR_PARAMETERS].read_text())
+        check_catalogue(self.labels, self.colors)
+        self.model = torchvision.models.mobilenet_v3_large(num_classes=self.labels["num_outputs"])
+        self.model.load_state_dict(torch.load(files[CLASSIFIER], map_location="cpu", weights_only=True))
+        self.model.eval()
+
+    def letterbox(self, im: Image.Image) -> Image.Image:
+        size = self.labels["input_size"]
+        im = ImageOps.contain(im, (size, size), Image.BILINEAR)
+        canvas = Image.new("RGB", (size, size), tuple(self.labels["pad_color"]))
+        canvas.paste(im, ((size - im.width) // 2, (size - im.height) // 2))
+        return canvas
+
+    def __call__(self, crops: list[Image.Image]) -> list[dict]:
+        """The `pred_*` columns for crops of one photo."""
+        mean, std = self.labels["mean"], self.labels["std"]
+        batch = torch.stack([TF.normalize(TF.to_tensor(self.letterbox(c)), mean, std) for c in crops])
+        with torch.inference_mode():
+            prob = torch.softmax(self.model(batch) / self.labels["temperature"], dim=1)
+        conf, sent = prob[:, : len(PARTS)].max(dim=1)
+        names = [*self.labels["classes"], OTHER]
+        colors, color_conf = name_colors(np.stack([brick_color(c, self.colors) for c in crops]), self.colors)
+        return [
+            {
+                "pred_part": names[s], "pred_part_conf": round(float(c), 4),
+                "pred_part_top1": names[int(t)], "pred_color": color,
+                "pred_color_conf": round(float(cc), 4),
+            }
+            for s, c, t, color, cc in zip(sent.tolist(), conf, prob.argmax(dim=1), colors, color_conf, strict=True)
+        ]
