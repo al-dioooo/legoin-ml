@@ -31,6 +31,11 @@ def main(argv: list[str] | None = None) -> None:
     label.add_argument("--port", type=int, default=8765, help="(default: %(default)s)")
     label.add_argument("--no-browser", action="store_true", help="don't open the page")
 
+    merge = commands.add_parser(
+        "merge", parents=[common], help="compare two labelers and write label.csv"
+    )
+    merge.add_argument("labelers", nargs=2, metavar="NAME", help="the two labelers' names")
+
     args = parser.parse_args(argv)
     layout = Layout(args.root.resolve())
     if args.command == "cut":
@@ -41,6 +46,10 @@ def main(argv: list[str] | None = None) -> None:
         from .label import serve
 
         serve(layout, args.port, open_browser=not args.no_browser)
+    elif args.command == "merge":
+        from .merge import merge as run_merge
+
+        run_merge(layout, *args.labelers)
 
 
 if __name__ == "__main__":
