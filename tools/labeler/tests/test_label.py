@@ -1,9 +1,13 @@
 import csv
+import json
+import threading
+import urllib.error
+import urllib.request
 
 import pytest
 
 from tools.labeler.files import MANIFEST_FIELDS, Layout, write_csv
-from tools.labeler.label import LabelError, Labels
+from tools.labeler.label import LabelError, Labels, make_server
 
 
 def crop(session, photo, n):
@@ -88,3 +92,41 @@ def test_the_page_never_gets_scores_or_predictions(layout):
 
     assert set(crops[0]) == {"file", "session", "photo", "preview", "n", "size", "box"}
     assert crops[0]["box"] == [5, 5, 55, 55]
+
+
+@pytest.fixture
+def server(layout):
+    server = make_server(Labels(layout), 0)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{server.server_address[1]}"
+    server.shutdown()
+    server.server_close()
+
+
+def request(url, body=None, headers=None):
+    data = None if body is None else json.dumps(body).encode()
+    headers = {"Content-Type": "application/json", **(headers or {})}
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, data, headers)) as response:
+            return response.status, response.read()
+    except urllib.error.HTTPError as error:
+        return error.code, error.read()
+
+
+def test_the_server_saves_answers_and_serves_only_known_images(server, layout):
+    status, _ = request(f"{server}/api/answer", {
+        "name": "budi", "file": "crops/s1/a_1.jpg", "part": "tile-1x2", "color": "white",
+    })
+    assert status == 200
+    assert rows(layout.labels / "budi.csv")[1] == ["crops/s1/a_1.jpg", "tile-1x2", "white", "s1"]
+
+    assert request(f"{server}/data/crops/s1/a_1.jpg")[0] == 200
+    assert request(f"{server}/data/crops/manifest.csv")[0] == 404
+    assert request(f"{server}/data/crops/s1/../../crops/manifest.csv")[0] == 404
+    assert request(f"{server}/api/start?name=..%2Fx")[0] == 400
+
+
+def test_the_server_refuses_other_hosts_and_form_posts(server):
+    assert request(f"{server}/api/labelers", headers={"Host": "evil.example"})[0] == 403
+    form = {"Content-Type": "application/x-www-form-urlencoded"}
+    assert request(f"{server}/api/answer", {"name": "x"}, headers=form)[0] == 415

@@ -8,9 +8,14 @@ The page gets the crops, their photos and boxes, never the detector score or v0.
 predictions, so nothing nudges the labeler.
 """
 
+import json
 import re
 import threading
+import webbrowser
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from .catalogue import (
     COLOR_VALUES,
@@ -99,3 +104,97 @@ class Labels:
             "colors": [{"id": c, "rgb": rgb, "name": n} for c, (rgb, n) in COLORS.items()],
             "other": OTHER, "target": TARGET, "target_other": TARGET_OTHER,
         }
+
+
+class Handler(BaseHTTPRequestHandler):
+    labels: Labels
+    port: int
+
+    def do_GET(self) -> None:
+        if not self.from_this_machine():
+            return
+        url = urlsplit(self.path)
+        query = parse_qs(url.query)
+        if url.path in STATIC:
+            name, kind = STATIC[url.path]
+            self.send(HTTPStatus.OK, (PAGE / name).read_bytes(), kind)
+        elif url.path == "/api/labelers":
+            self.send_json({"labelers": self.labels.labelers(), "crops": len(self.labels.crops)})
+        elif url.path == "/api/start":
+            self.answer(lambda: self.labels.start(query.get("name", [""])[0]))
+        elif url.path.startswith("/data/") and unquote(url.path[6:]) in self.labels.images:
+            data = (self.labels.layout.root / unquote(url.path[6:])).read_bytes()
+            self.send(HTTPStatus.OK, data, "image/jpeg", cache="max-age=3600")
+        else:
+            self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+
+    def do_POST(self) -> None:
+        if not self.from_this_machine():
+            return
+        # JSON only: a form on another website can't post JSON here without the browser asking.
+        if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
+            self.send_json({"error": "JSON only"}, HTTPStatus.UNSUPPORTED_MEDIA_TYPE)
+            return
+        body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+        if urlsplit(self.path).path == "/api/answer":
+            self.answer(lambda: self.labels.save(
+                body.get("name", ""), body.get("file", ""), body.get("part"), body.get("color")
+            ) or {"ok": True})
+        else:
+            self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+
+    def from_this_machine(self) -> bool:
+        # Refuses pages that reach this server through another host name (DNS rebinding).
+        if self.headers.get("Host") in {f"127.0.0.1:{self.port}", f"localhost:{self.port}"}:
+            return True
+        self.send_json({"error": "open the page at 127.0.0.1"}, HTTPStatus.FORBIDDEN)
+        return False
+
+    def answer(self, make) -> None:
+        try:
+            self.send_json(make())
+        except LabelError as error:
+            self.send_json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
+        except OSError as error:  # e.g. the CSV is open in a spreadsheet on Windows
+            self.send_json({"error": f"Can't write the labels: {error}"}, HTTPStatus.CONFLICT)
+
+    def send_json(self, data, status: HTTPStatus = HTTPStatus.OK) -> None:
+        self.send(status, json.dumps(data).encode(), "application/json")
+
+    def send(self, status: HTTPStatus, body: bytes, kind: str, cache: str = "no-store") -> None:
+        self.send_response(status)
+        self.send_header("Content-Type", kind)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", cache)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format, *args) -> None:  # the base class names it `format`
+        pass  # one line per image is noise; errors reach the page
+
+
+def make_server(labels: Labels, port: int) -> ThreadingHTTPServer:
+    """A server on 127.0.0.1 only; port 0 picks a free one."""
+    handler = type("BoundHandler", (Handler,), {"labels": labels})
+    server = ThreadingHTTPServer(("127.0.0.1", port), handler)
+    handler.port = server.server_address[1]
+    return server
+
+
+def serve(layout: Layout, port: int, open_browser: bool) -> None:
+    labels = Labels(layout)
+    if not labels.crops:
+        raise SystemExit(f"No crops in {layout.manifest}: run `python -m tools.labeler cut` first.")
+    try:
+        server = make_server(labels, port)
+    except OSError as error:
+        raise SystemExit(f"Port {port} is busy ({error}); try --port {port + 1}.") from error
+    url = f"http://127.0.0.1:{server.server_address[1]}/"
+    print(f"{len(labels.crops)} crops. Labeling page: {url} (Ctrl+C to stop)")
+    print(f"Answers are saved in {layout.labels}/<name>.csv after every crop.", flush=True)
+    if open_browser:
+        webbrowser.open(url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("Stopped.")
