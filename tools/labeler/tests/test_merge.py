@@ -79,6 +79,61 @@ def test_label_csv_has_the_agreed_answers_and_empty_disagreements(labeled):
     assert labeled.label_csv.read_text().splitlines()[0] == "file,part,color,session"
 
 
+def test_the_team_settles_disagreements_in_a_csv(labeled, capsys):
+    merge(labeled, "rina", "budi")
+    path = labeled.root / "disagreements.csv"
+    rows = read(path)
+    assert [(r["field"], r["budi"], r["rina"], r["final"]) for r in rows] == [
+        ("part", "brick-2x4", "plate-2x4", ""),
+        ("color", "white", "light-gray", ""),
+    ]
+
+    rows[0]["final"] = "plate-2x4"
+    write_csv(path, list(rows[0]), rows)
+    merge(labeled, "budi", "rina")  # in either order
+
+    assert read(labeled.label_csv)[1]["part"] == "plate-2x4"
+    assert read(labeled.label_csv)[2]["color"] == ""
+    assert read(path)[0]["final"] == "plate-2x4"  # kept for the next run
+    assert "1 settled, 1 without a final value" in capsys.readouterr().out
+
+
+def test_a_settled_value_is_dropped_when_a_labeler_changes_their_answer(labeled):
+    merge(labeled, "rina", "budi")
+    path = labeled.root / "disagreements.csv"
+    rows = read(path)
+    rows[0]["final"] = "plate-2x4"
+    write_csv(path, list(rows[0]), rows)
+    answers(labeled, "budi", [(0, "brick-2x4", "red"), (1, "brick-2x2", "white"),
+                              (2, "other", "white"), (3, "", "blue")])
+
+    merge(labeled, "rina", "budi")
+
+    assert read(path)[0]["final"] == ""
+    assert read(labeled.label_csv)[1]["part"] == ""
+
+
+def test_unknown_final_values_are_refused(labeled):
+    merge(labeled, "rina", "budi")
+    path = labeled.root / "disagreements.csv"
+    rows = read(path)
+    rows[1]["final"] = "purple"
+    write_csv(path, list(rows[0]), rows)
+    before = labeled.label_csv.read_text()
+
+    with pytest.raises(SystemExit, match="purple"):
+        merge(labeled, "rina", "budi")
+    assert labeled.label_csv.read_text() == before
+
+
+def test_disagreements_of_another_pair_are_never_overwritten(labeled):
+    merge(labeled, "rina", "budi")
+    answers(labeled, "siti", [(0, "brick-2x4", "red")])
+
+    with pytest.raises(SystemExit, match="move it away"):
+        merge(labeled, "rina", "siti")
+
+
 @pytest.mark.parametrize("names", [("rina", "rina"), ("rina", "nobody"), ("../rina", "budi")])
 def test_merge_needs_two_labelers_with_answers(labeled, names):
     with pytest.raises(SystemExit):

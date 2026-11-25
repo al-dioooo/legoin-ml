@@ -1,13 +1,16 @@
 """`merge`: compares two labelers' answers, then writes label.csv for notebooks 02 and 03.
 
 For each field, over the crops both labelers answered, it reports the raw agreement and
-Cohen's kappa, with doubtful counted as a value of its own, and lists the disagreements. A
-disagreement stays empty in label.csv, so the notebooks skip that crop for that stage.
+Cohen's kappa, with doubtful counted as a value of its own, and lists the disagreements. They
+go to `disagreements.csv`, where the team writes the settled value in `final` after looking
+at the brick together. Rerunning `merge` reads those values back. A disagreement left without
+a `final` stays empty in label.csv, so the notebooks skip that crop for that stage.
 
 Crops that only one labeler answered are left out of label.csv, since nobody checked them.
 """
 
 from collections import Counter
+from pathlib import Path
 
 from .catalogue import (
     COLOR_VALUES,
@@ -45,6 +48,26 @@ def read_labels(layout: Layout, name: str) -> dict[str, dict[str, str]]:
     return {row["file"]: row for row in read_csv(path)}
 
 
+def read_settled(path: Path, names: list[str]) -> dict[tuple[str, str, str, str], str]:
+    """The team's `final` values, by (file, field, first answer, second answer)."""
+    rows = read_csv(path)
+    if not rows:
+        return {}
+    if list(rows[0])[3:5] != names:
+        raise SystemExit(
+            f"{path.name} compares {list(rows[0])[3:5]}, not {names}; move it away first."
+        )
+    settled, wrong = {}, []
+    for row in rows:
+        final = row["final"].strip()
+        if final not in FIELDS[row["field"]][1]:
+            wrong.append(f"  {row['file']} {row['field']}: {final!r}")
+        settled[row["file"], row["field"], row[names[0]], row[names[1]]] = final
+    if wrong:
+        raise SystemExit(f"Unknown values in {path.name}'s final column:\n" + "\n".join(wrong))
+    return settled
+
+
 def merge(layout: Layout, first: str, second: str) -> None:
     names = sorted({first, second})
     if len(names) != 2:
@@ -75,15 +98,31 @@ def merge(layout: Layout, first: str, second: str) -> None:
                 f"{x}/{y} ({k})" for (x, y), k in mixed.most_common(5)))
         disagreements += [(f, field, a[f][field], b[f][field]) for f in both if a[f][field] != b[f][field]]
 
-    print(f"\n{len(disagreements)} disagreements, left empty in label.csv:")
-    for f, field, x, y in disagreements:
-        print(f"  {f}  {field}: {names[0]}={shown(x)}, {names[1]}={shown(y)}")
+    path = layout.root / "disagreements.csv"
+    settled = read_settled(path, names)
+    rows = [
+        {"file": f, "session": sessions[f], "field": field, names[0]: x, names[1]: y,
+         "final": settled.get((f, field, x, y), "")}
+        for f, field, x, y in disagreements
+    ]
+    write_csv(path, ["file", "session", "field", *names, "final"], rows)
+    current = {(f, field, x, y) for f, field, x, y in disagreements}
+    if stale := [key for key, value in settled.items() if value and key not in current]:
+        print(f"{len(stale)} final values were for answers a labeler has since changed; dropped.")
+    decided = {(r["file"], r["field"]): r["final"] for r in rows}
+    open_ = sum(not r["final"] for r in rows)
+    print(f"\n{len(rows)} disagreements in {layout.rel(path)}: {len(rows) - open_} settled, "
+          f"{open_} without a final value (left empty in label.csv).")
+    for r in rows:
+        if not r["final"]:
+            print(f"  {r['file']}  {r['field']}: {names[0]}={shown(r[names[0]])}, "
+                  f"{names[1]}={shown(r[names[1]])}")
 
     final = []
     for f in both:
         row = {"file": f, "session": sessions[f]}
         for field in FIELDS:
-            row[field] = a[f][field] if a[f][field] == b[f][field] else DOUBTFUL
+            row[field] = a[f][field] if a[f][field] == b[f][field] else decided[f, field]
         final.append(row)
     write_csv(layout.label_csv, LABEL_FIELDS, final)
     print(f"\nWrote {layout.rel(layout.label_csv)}: {len(final)} crops.")
