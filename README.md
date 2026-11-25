@@ -82,6 +82,20 @@ python -m tools.labeler cut
 
 `cut` downloads `best.pt` from release `v0.2.0` once and checks its SHA-256. It then runs the detector on every photo that isn't cut yet, with the release's settings (`imgsz` 640, `conf` 0.65), after applying the photo's EXIF orientation. Each box is widened exactly as legoin-api and Ultralytics' `save_crop` do, and saved as `crops/<session>/<photo>_<n>.jpg`, numbered top to bottom. `crops/manifest.csv` lists each crop's photo, session, box and detector score. After you add photos, run it again; it skips the photos already cut.
 
+**Label.** Two team members each label every crop, on their own, without seeing each other's answers:
+
+```bash
+python -m tools.labeler label
+```
+
+The page opens at <http://127.0.0.1:8765/> and asks for your name. It shows each crop large next to its photo, with the box drawn. Pick the part, then the color, with the keys on the buttons or with the mouse:
+
+- `O` marks a piece or a color outside the catalogue (`other`).
+- `X` marks the field doubtful and leaves it empty, so the notebooks skip that crop for that stage.
+- `Z` undoes, and the arrow keys move between crops.
+
+Answers go to `labels/<name>.csv` after every crop, so closing the tab loses nothing. Progress bars count your crops against the targets. The page tells you to label from the brick in your hand, not only the photo, and which pairs are often mixed up. It never shows the models' guesses. `label` needs only Python 3.12, with nothing to install, so a labeler can work on their own computer with a copy of the repository and of the data root's `crops/` and `preview/` folders.
+
 The data root defaults to `notebooks/data/foto_mandiri`, where the notebooks look when they run locally; `--root` picks another folder. Git ignores it, like every `data/` folder. On Colab, upload the folder to `/content/data/foto_mandiri`; the crops and `label.csv` are enough.
 
 ## Checks
