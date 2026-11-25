@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pelabelan crop · Legoin</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="bar">
+    <h1>Pelabelan crop <span>Legoin</span></h1>
+    <p id="who" hidden>Pelabel: <b id="name"></b> · <a href="#" id="switch">ganti</a></p>
+    <p id="overall"></p>
+    <p id="status" role="status" aria-live="polite"></p>
+  </header>
+
+  <section id="login" class="login" hidden>
+    <h2>Siapa yang melabeli?</h2>
+    <p>Tulis nama panggilanmu: huruf kecil, angka, <code>-</code> atau <code>_</code>. Labelmu disimpan di <code>labels/&lt;nama&gt;.csv</code> setiap kali satu crop selesai.</p>
+    <p>Dua anggota melabeli semua crop <b>secara terpisah</b>. Jangan melihat atau membahas label anggota lain sampai keduanya selesai.</p>
+    <form id="login-form">
+      <input id="name-input" autocomplete="off" required maxlength="32" placeholder="misalnya: rina" aria-label="Nama pelabel">
+      <button>Mulai</button>
+    </form>
+    <p id="login-error" class="error"></p>
+    <p id="known"></p>
+  </section>
+
+  <main id="work" hidden>
+    <figure class="crop-view">
+      <div class="frame"><img id="crop" alt="Crop kepingan yang sedang dilabeli"></div>
+      <figcaption id="crop-info"></figcaption>
+    </figure>
+
+    <figure class="photo-view">
+      <div class="frame">
+        <img id="photo" alt="Foto utuh tempat crop ini dipotong">
+        <svg id="boxes" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+      </div>
+      <figcaption>Foto utuh. Kotak oranye: crop ini; kotak putih: kepingan lain di foto yang sama.</figcaption>
+    </figure>
+
+    <section class="answer" aria-label="Jawaban">
+      <p id="done" class="done" hidden></p>
+      <fieldset id="part-field" class="field">
+        <legend><span class="step">1</span> Part</legend>
+        <div id="parts" class="choices"></div>
+      </fieldset>
+      <fieldset id="color-field" class="field">
+        <legend><span class="step">2</span> Warna</legend>
+        <div id="colors" class="choices"></div>
+      </fieldset>
+      <nav class="nav">
+        <button type="button" id="prev"><kbd>←</kbd> Sebelumnya</button>
+        <button type="button" id="next">Berikutnya <kbd>→</kbd></button>
+        <button type="button" id="todo"><kbd>N</kbd> Belum dilabeli</button>
+        <button type="button" id="undo"><kbd>Z</kbd> Urungkan</button>
+      </nav>
+      <p class="keys">
+        <kbd>Tab</kbd> pindah antara part dan warna. Setelah warna dipilih, crop berikutnya yang belum dilabeli muncul.
+      </p>
+    </section>
+
+    <aside class="help">
+      <h2>Cara melabeli</h2>
+      <ul>
+        <li><b>Pegang kepingan aslinya.</b> Labeli dari kepingan di tanganmu, bukan hanya dari foto: cahaya dan kamera HP mengubah warna dan bentuk.</li>
+        <li><b>Warna yang sering tertukar:</b> <code>light-gray</code>/<code>white</code>, <code>dark-gray</code>/<code>black</code>, <code>brown</code>/<code>dark-gray</code>, dan <code>orange</code>/<code>yellow</code>.</li>
+        <li><b>Brick atau plate:</b> dari atas keduanya tampak sama. Brick tiga kali lebih tinggi dari plate, jadi lihat sisinya.</li>
+        <li><b>Lain <kbd>O</kbd>:</b> kepingan LEGO di luar 13 part katalog, atau warna di luar 10 warna katalog.</li>
+        <li><b>Ragu <kbd>X</kbd>:</b> crop terpotong, bertumpuk, berisi lebih dari satu kepingan, bukan LEGO, atau kamu tidak yakin. Kolom itu dibiarkan kosong dan crop dilewati untuk tahap itu.</li>
+      </ul>
+    </aside>
+
+    <section class="progress" aria-label="Progres">
+      <div>
+        <h2>Per part <small id="part-target"></small></h2>
+        <div id="part-progress" class="bars"></div>
+      </div>
+      <div>
+        <h2>Per warna <small id="color-target"></small></h2>
+        <div id="color-progress" class="bars"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
