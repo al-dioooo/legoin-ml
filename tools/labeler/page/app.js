@@ -234,6 +234,34 @@ function render() {
   }
   $('done').hidden = done < S.crops.length;
   $('done').textContent = `Semua ${S.crops.length} crop sudah kamu labeli. Setelah anggota kedua juga selesai, label kalian dibandingkan dengan merge.`;
+  renderProgress();
+}
+
+function bars(container, items, key) {
+  const counts = new Map();
+  for (const answer of Object.values(S.answers)) counts.set(answer[key], (counts.get(answer[key]) || 0) + 1);
+  const rows = [];
+  for (const item of items) {
+    const count = counts.get(item.id) || 0;
+    const target = item.target;
+    const track = el('span', { class: 'track' + (!target ? ' none' : count >= target ? ' full' : '') },
+      el('i', { style: `width:${target ? Math.min(100, (100 * count) / target) : 0}%` }));
+    rows.push(el('span', { class: 'label' }, ...(item.swatch ? [item.swatch] : []), item.label), track,
+      el('span', { class: 'count' }, target ? `${count}/${target}` : String(count)));
+  }
+  container.replaceChildren(...rows);
+}
+
+function renderProgress() {
+  const tail = (sw) => [
+    { id: S.other, label: 'lain', target: S.target_other, swatch: sw && el('i', { class: 'sw other' }) },
+    { id: DOUBTFUL, label: 'ragu', target: 0, swatch: sw && el('i', { class: 'sw doubtful' }) },
+  ];
+  bars($('part-progress'), [...S.parts.map((p) => ({ id: p.id, label: p.id, target: S.target })), ...tail(false)], 'part');
+  bars($('color-progress'), [
+    ...S.colors.map((c) => ({ id: c.id, label: c.id, target: S.target, swatch: el('i', { class: 'sw', style: `background:#${c.rgb}` }) })),
+    ...tail(true),
+  ], 'color');
 }
 
 $('login-form').onsubmit = (event) => {
