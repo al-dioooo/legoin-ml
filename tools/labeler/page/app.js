@@ -264,6 +264,41 @@ function renderProgress() {
   ], 'color');
 }
 
+// ---- Keyboard ---------------------------------------------------------------------------------
+
+function keyValue(key) {
+  if (key === 'o') return S.other;
+  if (key === 'x') return DOUBTFUL;
+  const i = (field === 'part' ? PART_KEYS : COLOR_KEYS).indexOf(key);
+  return i < 0 ? undefined : (field === 'part' ? S.parts : S.colors)[i].id;
+}
+
+document.addEventListener('keydown', (event) => {
+  if (!S || $('work').hidden || event.target.matches('input') || event.altKey || event.metaKey) return;
+  const key = event.key.toLowerCase();
+  if (event.ctrlKey) {
+    if (key === 'z') { event.preventDefault(); enqueue(undo); }
+    return;
+  }
+  const moves = {
+    tab: () => { field = field === 'part' ? 'color' : 'part'; render(); },
+    arrowleft: () => show(index - 1),
+    arrowright: () => show(index + 1),
+    n: nextToDo,
+    z: undo,
+    backspace: undo,
+  };
+  if (moves[key]) {
+    event.preventDefault();
+    return enqueue(moves[key]);
+  }
+  if (['o', 'x', ...PART_KEYS].includes(key)) {
+    event.preventDefault();
+    // The field is read when the key's turn comes, after the keys typed before it.
+    enqueue(() => { const value = keyValue(key); if (value !== undefined) return choose(field, value); });
+  }
+});
+
 $('login-form').onsubmit = (event) => {
   event.preventDefault();
   enqueue(() => start($('name-input').value.trim().toLowerCase().replace(/\s+/g, '-')));
