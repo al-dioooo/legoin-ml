@@ -35,3 +35,7 @@ jobs:
       # Valid notebooks with outputs cleared; no datasets, runs or weights
       - name: Repository checks
         run: python scripts/check_repo.py
+
+      # The labeling tool; tests that need Ultralytics skip themselves
+      - name: Tests
+        run: python -m pytest tools
