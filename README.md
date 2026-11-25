@@ -82,6 +82,8 @@ python -m tools.labeler cut
 
 `cut` downloads `best.pt` from release `v0.2.0` once and checks its SHA-256. It then runs the detector on every photo that isn't cut yet, with the release's settings (`imgsz` 640, `conf` 0.65), after applying the photo's EXIF orientation. Each box is widened exactly as legoin-api and Ultralytics' `save_crop` do, and saved as `crops/<session>/<photo>_<n>.jpg`, numbered top to bottom. `crops/manifest.csv` lists each crop's photo, session, box and detector score. After you add photos, run it again; it skips the photos already cut.
 
+With `--predict`, `cut` also stores release `v0.2.0`'s own answer for each crop in the manifest's `pred_*` columns: the part, the color and their confidences, computed as legoin-api computes them. Joined with `label.csv` on `file`, they measure the deployed models on phone photos. The labeling page never shows them.
+
 **Label.** Two team members each label every crop, on their own, without seeing each other's answers:
 
 ```bash

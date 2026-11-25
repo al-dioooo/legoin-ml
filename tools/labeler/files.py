@@ -23,6 +23,8 @@ MANIFEST_FIELDS = [
     "file", "session", "photo", "preview", "width", "height", "n", "score",
     "x1", "y1", "x2", "y2", "crop_x1", "crop_y1", "crop_x2", "crop_y2",
 ]
+# With `cut --predict`: release v0.2.0's own answers, for the accuracy report. Never labeled with.
+PREDICTION_FIELDS = ["pred_part", "pred_part_conf", "pred_part_top1", "pred_color", "pred_color_conf"]
 # One row per photo cut, including photos where the detector found nothing.
 PHOTO_FIELDS = ["photo", "session", "width", "height", "crops", "model"]
 

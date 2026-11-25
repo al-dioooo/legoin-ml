@@ -26,6 +26,7 @@ from .files import (
     MANIFEST_FIELDS,
     PHOTO_FIELDS,
     PHOTO_SUFFIXES,
+    PREDICTION_FIELDS,
     Layout,
     read_csv,
     write_csv,
@@ -52,10 +53,10 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def release_file(name: str, folder: Path) -> Path:
+def release_file(name: str, folder: Path, expected: str) -> Path:
     """A file of the release, downloaded once and never used unless its SHA-256 matches."""
     path = folder / TAG / name
-    if path.exists() and sha256(path) == SHA256[name]:
+    if path.exists() and sha256(path) == expected:
         return path
     path.parent.mkdir(parents=True, exist_ok=True)
     url = f"{RELEASE_URL}/{name}"
@@ -73,9 +74,9 @@ def release_file(name: str, folder: Path) -> Path:
             if attempt == ATTEMPTS:
                 raise SystemExit(f"Couldn't download {url}: {error}") from error
             print(f"Download failed ({error}); trying again.")
-    if (actual := sha256(partial)) != SHA256[name]:
+    if (actual := sha256(partial)) != expected:
         partial.unlink()
-        raise SystemExit(f"{url} has SHA-256 {actual}, not {SHA256[name]}; not using it.")
+        raise SystemExit(f"{url} has SHA-256 {actual}, not {expected}; not using it.")
     partial.replace(path)
     return path
 
@@ -138,21 +139,48 @@ def cut_photo(model: YOLO, layout: Layout, session: str, path: Path) -> tuple[di
     return photo, rows
 
 
-def cut(layout: Layout, models: Path) -> None:
+def manifest_fields(manifest: list[dict]) -> list[str]:
+    predicted = any("pred_part" in row for row in manifest)
+    return MANIFEST_FIELDS + PREDICTION_FIELDS if predicted else MANIFEST_FIELDS
+
+
+def add_predictions(layout: Layout, manifest: list[dict], models: Path) -> None:
+    """v0.2.0's part and color answers for every crop that has none yet, photo by photo."""
+    todo = sorted({row["photo"] for row in manifest if not row.get("pred_part")})
+    print(f"{len(todo)} photos without v0.2.0 predictions.")
+    if not todo:
+        return
+    from .predict import SHA256 as FILES
+    from .predict import Predictor  # needs scikit-learn and scikit-image too
+
+    predictor = Predictor({name: release_file(name, models, h) for name, h in FILES.items()})
+    for k, photo in enumerate(todo, start=1):
+        rows = [row for row in manifest if row["photo"] == photo]
+        with Image.open(layout.root / photo) as opened:
+            image = ImageOps.exif_transpose(opened).convert("RGB")
+        boxes = [tuple(int(row[c]) for c in ("crop_x1", "crop_y1", "crop_x2", "crop_y2")) for row in rows]
+        for row, answer in zip(rows, predictor([image.crop(b) for b in boxes]), strict=True):
+            row.update(answer)
+        write_csv(layout.manifest, manifest_fields(manifest), manifest)
+        print(f"[{k}/{len(todo)}] {photo}: predictions for {len(rows)} crops")
+
+
+def cut(layout: Layout, models: Path, predict: bool = False) -> None:
     photos = read_csv(layout.photo_list)
     manifest = read_csv(layout.manifest)
     pending = photos_to_cut(layout, {p["photo"] for p in photos})
     print(f"{len(photos)} photos already cut, {len(pending)} to cut.")
-    if not pending:
-        return
-    model = YOLO(str(release_file(DETECTOR, models)), task="detect")
+    if pending:
+        model = YOLO(str(release_file(DETECTOR, models, SHA256[DETECTOR])), task="detect")
     for k, (session, path) in enumerate(pending, start=1):
         photo, rows = cut_photo(model, layout, session, path)
         # Whole files after every photo: an interrupted run leaves no half-recorded photo.
         manifest = [r for r in manifest if r["photo"] != photo["photo"]] + rows
         manifest.sort(key=lambda r: (r["session"], r["photo"], int(r["n"])))
         photos.append(photo)
-        write_csv(layout.manifest, MANIFEST_FIELDS, manifest)
+        write_csv(layout.manifest, manifest_fields(manifest), manifest)
         write_csv(layout.photo_list, PHOTO_FIELDS, photos)
         print(f"[{k}/{len(pending)}] {photo['photo']}: {len(rows)} crops")
+    if predict:
+        add_predictions(layout, manifest, models)
     print(f"{len(manifest)} crops in {layout.rel(layout.manifest)}")

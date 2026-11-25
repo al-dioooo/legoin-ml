@@ -24,6 +24,10 @@ def main(argv: list[str] | None = None) -> None:
         "--models", type=Path,
         help="where release files are kept (default: a models folder next to the root)",
     )
+    cut.add_argument(
+        "--predict", action="store_true",
+        help="also store v0.2.0's part and color answers in the manifest, never shown when labeling",
+    )
 
     label = commands.add_parser(
         "label", parents=[common], help="label the crops on a local page, as one labeler"
@@ -41,7 +45,7 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "cut":
         from .cut import cut as run_cut  # loads Ultralytics, which only `cut` needs
 
-        run_cut(layout, (args.models or layout.root.parent / "models").resolve())
+        run_cut(layout, (args.models or layout.root.parent / "models").resolve(), args.predict)
     elif args.command == "label":
         from .label import serve
 
