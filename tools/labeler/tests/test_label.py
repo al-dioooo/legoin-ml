@@ -6,7 +6,7 @@ import urllib.request
 
 import pytest
 
-from tools.labeler.files import MANIFEST_FIELDS, Layout, write_csv
+from tools.labeler.files import MANIFEST_FIELDS, PREDICTION_FIELDS, Layout, write_csv
 from tools.labeler.label import LabelError, Labels, make_server
 
 
@@ -16,6 +16,8 @@ def crop(session, photo, n):
         "photo": f"photos/{session}/{photo}.jpg", "preview": f"preview/{session}/{photo}.jpg",
         "width": 640, "height": 480, "n": n, "score": 0.9, "x1": 10, "y1": 10, "x2": 50,
         "y2": 50, "crop_x1": 5, "crop_y1": 5, "crop_x2": 55, "crop_y2": 55,
+        "pred_part": "brick-2x4", "pred_part_conf": 0.97, "pred_part_top1": "brick-2x4",
+        "pred_color": "red", "pred_color_conf": 0.9,
     }
 
 
@@ -23,7 +25,7 @@ def crop(session, photo, n):
 def layout(tmp_path):
     layout = Layout(tmp_path / "foto_mandiri")
     crops = [crop("s1", "a", 1), crop("s1", "a", 2), crop("s2", "b", 1)]
-    write_csv(layout.manifest, MANIFEST_FIELDS, crops)
+    write_csv(layout.manifest, MANIFEST_FIELDS + PREDICTION_FIELDS, crops)
     for row in crops:
         (layout.root / row["file"]).parent.mkdir(parents=True, exist_ok=True)
         (layout.root / row["file"]).write_bytes(b"\xff\xd8 not really a jpeg")
