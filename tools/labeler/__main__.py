@@ -3,14 +3,15 @@
 import argparse
 from pathlib import Path
 
-from .files import DEFAULT_ROOT, Layout
+from .files import Layout, default_root
 
 
 def main(argv: list[str] | None = None) -> None:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument(
-        "--root", type=Path, default=DEFAULT_ROOT,
-        help="the data root, data/foto_mandiri of notebooks 02 and 03 (default: %(default)s)",
+        "--root", type=Path, default=default_root(),
+        help="the data root, data/foto_mandiri of notebooks 02 and 03, or $LEGOIN_DATA_DIR/foto_mandiri "
+        "when that is set (default: %(default)s)",
     )
     parser = argparse.ArgumentParser(
         prog="python -m tools.labeler", description="Label the team's phone photos of bricks."

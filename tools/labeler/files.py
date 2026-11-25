@@ -1,8 +1,10 @@
 """The tool's folders under the data root, and the CSV files it reads and writes.
 
 The data root is notebooks 02 and 03's `data/foto_mandiri`. Run locally, the notebooks look
-for it next to themselves, so it defaults to `notebooks/data/foto_mandiri` here. Git ignores
-every `data/` folder, so photos, crops and labels are never committed.
+for it next to themselves, so it defaults to `notebooks/data/foto_mandiri` here. When
+LEGOIN_DATA_DIR is set, the notebooks read their datasets from that folder instead, and so
+does this tool: `$LEGOIN_DATA_DIR/foto_mandiri`. Git ignores every `data/` folder, so photos,
+crops and labels are never committed.
 
 Needs only the standard library, so `label` and `merge` run on a bare Python.
 """
@@ -13,7 +15,14 @@ import tempfile
 from collections.abc import Iterable
 from pathlib import Path
 
-DEFAULT_ROOT = Path(__file__).resolve().parents[2] / "notebooks" / "data" / "foto_mandiri"
+NOTEBOOK_DATA = Path(__file__).resolve().parents[2] / "notebooks" / "data"
+
+
+def default_root() -> Path:
+    """`foto_mandiri` in the folder the notebooks read datasets from."""
+    data = os.environ.get("LEGOIN_DATA_DIR")
+    return (Path(data).expanduser() if data else NOTEBOOK_DATA) / "foto_mandiri"
+
 
 PHOTO_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp")
 

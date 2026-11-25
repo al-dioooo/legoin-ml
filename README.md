@@ -36,6 +36,19 @@ It is licensed CC BY 4.0. Its zip is 6 GB, but the notebook reads the zip's inde
 
 Stage 3 starts from Rebrickable's RGB values for the 10 catalogue colors (<https://rebrickable.com/colors/>). It tests the method on the renders of the same *LEGO bricks for training classification network* (CC BY 4.0, cited above), whose file names carry the brick's LEGO color name, and downloads only the folders it uses. No public dataset labels real photos with the catalogue colors, so color accuracy on phone photos needs crops the team labels itself; notebook 03 explains how.
 
+### Dataset folders
+
+Every dataset sits in one folder per dataset under the data root: `data/` next to the notebook when it runs locally, `/content/data` on Colab, or the folder in `LEGOIN_DATA_DIR` when that is set.
+
+| Folder | Written by | Read by | Contents |
+| --- | --- | --- | --- |
+| `lego_tagged_raw/` | Notebook 01 (download) | Notebook 01 | *Tagged images with LEGO bricks* as unzipped: photos and renders with PASCAL VOC boxes |
+| `lego_yolo/` | Notebook 01 (conversion, rebuilt on every run) | Notebook 01 | The same images in YOLO format, photos resized to 1,280 px, split 70/15/15 |
+| `lego_klasifikasi/` | Notebooks 02 and 03 (download) | Notebooks 02 and 03 | The part folders of *LEGO bricks for training classification network* that the notebooks use (73 with notebook 02's default config), resized to 256 px |
+| `foto_mandiri/` | `tools/labeler` | Notebook 02 (section 10) and notebook 03 (section 8.2) | The team's phone photos, crops and `label.csv` |
+
+Training runs and weights don't go there; they go to `runs/` next to the notebook, or to Google Drive on Colab.
+
 ## Tech stack
 
 - Python 3.12
@@ -59,7 +72,7 @@ pip install jupyterlab
 jupyter lab
 ```
 
-The notebook's first cell installs its own dependencies. Outside Colab it writes `data/` and `runs/` next to the notebook, and git ignores both. On a headless Linux server, replace `opencv-python` with `opencv-python-headless` if importing Ultralytics fails on `libGL.so.1`.
+The notebook's first cell installs its own dependencies. Outside Colab it writes `data/` and `runs/` next to the notebook, and git ignores both. To keep the datasets in one folder for every notebook instead of `data/`, set `LEGOIN_DATA_DIR`, e.g. `LEGOIN_DATA_DIR=~/dev/legoin/ml-datasets jupyter lab`; see [Dataset folders](#dataset-folders). On a headless Linux server, replace `opencv-python` with `opencv-python-headless` if importing Ultralytics fails on `libGL.so.1`.
 
 ## Labeling your own photos
 
@@ -114,7 +127,7 @@ Crops only one person answered are left out. `merge` ends with the counts still 
 
 **Rerun the notebooks.** With `label.csv` in place, rerun notebook 02 (section 10) and notebook 03 (section 8.2) to measure part and color accuracy on the phone crops against the PRD's 85%. If accuracy falls short, fine-tune the classifier or calibrate the colors on part of the crops, keeping each session's crops together, and release the result as `v0.3.0`.
 
-The data root defaults to `notebooks/data/foto_mandiri`, where the notebooks look when they run locally; `--root` picks another folder. Git ignores it, like every `data/` folder. On Colab, upload the folder to `/content/data/foto_mandiri`; the crops and `label.csv` are enough.
+The data root defaults to `notebooks/data/foto_mandiri`, where the notebooks look when they run locally, or to `$LEGOIN_DATA_DIR/foto_mandiri` when `LEGOIN_DATA_DIR` is set; `--root` picks another folder. Git ignores it, like every `data/` folder. On Colab, upload the folder to `/content/data/foto_mandiri`; the crops and `label.csv` are enough.
 
 ## Checks
 
@@ -129,10 +142,11 @@ python -m pytest tools
 
 ## Environment variables
 
-None by default; the notebooks need no keys or tokens.
+None are required; the notebooks need no keys or tokens.
 
 | Variable | Used for |
 | --- | --- |
+| `LEGOIN_DATA_DIR` | Optional. The folder that holds the [dataset folders](#dataset-folders), for local runs and `tools/labeler`. Unset, the notebooks use `data/` next to themselves (`/content/data` on Colab) and the labeler uses `notebooks/data/foto_mandiri`. A notebook that downloads or converts data writes there too: notebook 01 rebuilds `lego_yolo/` on every run. |
 | `KAGGLE_USERNAME`, `KAGGLE_KEY` | Optional. Only to add B200C to stage 2 training by hand. On Colab, store them as Colab secrets; never write them in a notebook. |
 
 ## Model releases
