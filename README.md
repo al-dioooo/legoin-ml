@@ -96,6 +96,22 @@ The page opens at <http://127.0.0.1:8765/> and asks for your name. It shows each
 
 Answers go to `labels/<name>.csv` after every crop, so closing the tab loses nothing. Progress bars count your crops against the targets. The page tells you to label from the brick in your hand, not only the photo, and which pairs are often mixed up. It never shows the models' guesses. `label` needs only Python 3.12, with nothing to install, so a labeler can work on their own computer with a copy of the repository and of the data root's `crops/` and `preview/` folders.
 
+**Merge.** When both have finished, compare their answers:
+
+```bash
+python -m tools.labeler merge rina budi
+```
+
+`merge` reports, for the part and for the color, the raw agreement and Cohen's kappa over the crops both answered, and the pairs most often mixed up. It lists each disagreement in `disagreements.csv`. Look at those bricks together, write the agreed id in the `final` column (or leave it empty to drop the crop for that field), and run `merge` again; it keeps your `final` values. It writes `label.csv` with columns `file,part,color,session`:
+
+- agreed answers as they are;
+- settled disagreements with their `final` value;
+- the rest empty, so the notebooks skip them.
+
+Crops only one person answered are left out. `merge` ends with the counts still below target, which tells you what to photograph next.
+
+**Rerun the notebooks.** With `label.csv` in place, rerun notebook 02 (section 10) and notebook 03 (section 8.2) to measure part and color accuracy on the phone crops against the PRD's 85%. If accuracy falls short, fine-tune the classifier or calibrate the colors on part of the crops, keeping each session's crops together, and release the result as `v0.3.0`.
+
 The data root defaults to `notebooks/data/foto_mandiri`, where the notebooks look when they run locally; `--root` picks another folder. Git ignores it, like every `data/` folder. On Colab, upload the folder to `/content/data/foto_mandiri`; the crops and `label.csv` are enough.
 
 ## Checks
