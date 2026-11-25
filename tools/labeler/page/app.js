@@ -3,10 +3,14 @@
 // with only its part chosen is kept in localStorage, so closing the tab loses nothing.
 
 const $ = (id) => document.getElementById(id);
+const PART_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'q', 'w', 'e'];
+const COLOR_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
+const DOUBTFUL = '';
 
 let S = null; // the server's /api/start: name, crops, answers, parts, colors, other, targets
 let index = 0; // the crop on screen
 let field = 'part'; // the field the keys answer
+let history = []; // saved answers, newest last, for undo: {file, before}
 const byPhoto = new Map();
 let queue = Promise.resolve();
 
@@ -81,6 +85,8 @@ async function start(name) {
     if (!byPhoto.has(crop.photo)) byPhoto.set(crop.photo, []);
     byPhoto.get(crop.photo).push(crop);
   }
+  history = [];
+  buildChoices();
   $('part-target').textContent = `(target ${S.target}, lain ${S.target_other})`;
   $('color-target').textContent = `(target ${S.target}, lain ${S.target_other})`;
   $('name').textContent = name;
@@ -91,11 +97,82 @@ async function start(name) {
   show(first < 0 ? 0 : first);
 }
 
+// ---- Choices ----------------------------------------------------------------------------------
+
+function choiceButton(which, value, key, id, sub, swatch) {
+  const button = el('button', { type: 'button', class: 'choice', 'data-field': which, 'data-value': value, title: `${id} · ${sub}` });
+  button.append(el('kbd', {}, key));
+  if (swatch) button.append(swatch);
+  button.append(el('span', { class: 'text' }, el('span', { class: 'id' }, id), el('span', { class: 'sub' }, sub)));
+  if (value === DOUBTFUL) button.classList.add('doubtful');
+  button.onclick = () => enqueue(() => choose(which, value));
+  return button;
+}
+
+function buildChoices() {
+  $('parts').replaceChildren(
+    ...S.parts.map((p, i) => choiceButton('part', p.id, PART_KEYS[i].toUpperCase(), p.id, p.design)),
+    choiceButton('part', S.other, 'O', 'lain', 'luar katalog'),
+    choiceButton('part', DOUBTFUL, 'X', 'ragu', 'dikosongkan'),
+  );
+  $('colors').replaceChildren(
+    ...S.colors.map((c, i) => choiceButton('color', c.id, COLOR_KEYS[i], c.id, c.name,
+      el('i', { class: 'sw', style: `background:#${c.rgb}` }))),
+    choiceButton('color', S.other, 'O', 'lain', 'luar katalog', el('i', { class: 'sw other' })),
+    choiceButton('color', DOUBTFUL, 'X', 'ragu', 'dikosongkan', el('i', { class: 'sw doubtful' })),
+  );
+}
+
 // The answer on screen: what was saved, or the part chosen so far.
 function draft(file) {
   const pending = localStorage.getItem(draftKey(file));
   if (pending) return JSON.parse(pending);
   return S.answers[file] ? { ...S.answers[file] } : {};
+}
+
+async function choose(which, value) {
+  const file = S.crops[index].file;
+  const answer = draft(file);
+  answer[which] = value;
+  field = answer.part === undefined ? 'part' : 'color';
+  if (answer.part === undefined || answer.color === undefined) {
+    localStorage.setItem(draftKey(file), JSON.stringify(answer));
+    return render();
+  }
+  const before = S.answers[file] ? { ...S.answers[file] } : null;
+  if (!before || before.part !== answer.part || before.color !== answer.color) {
+    localStorage.setItem(draftKey(file), JSON.stringify(answer)); // kept if the save fails
+    await save(file, answer.part, answer.color);
+    history.push({ file, before });
+  }
+  // The color is the last step: then on to the next crop nobody has answered yet.
+  if (which === 'color') return nextToDo();
+  render();
+}
+
+async function save(file, part, color) {
+  setStatus('Menyimpan…');
+  await api('/api/answer', { name: S.name, file, part, color });
+  if (part === null) delete S.answers[file];
+  else S.answers[file] = { part, color };
+  localStorage.removeItem(draftKey(file));
+  setStatus(`Tersimpan · ${Object.keys(S.answers).length} crop`, 'ok');
+}
+
+async function undo() {
+  const file = S.crops[index].file;
+  if (localStorage.getItem(draftKey(file))) { // a part chosen but not yet saved
+    localStorage.removeItem(draftKey(file));
+    field = 'part';
+    setStatus('Pilihan dibatalkan');
+    return render();
+  }
+  const last = history.pop();
+  if (!last) return setStatus('Tidak ada jawaban untuk diurungkan');
+  const { before } = last;
+  await save(last.file, before ? before.part : null, before ? before.color : null);
+  show(S.crops.findIndex((crop) => crop.file === last.file));
+  setStatus(before ? 'Diurungkan: jawaban sebelumnya dipulihkan' : 'Diurungkan: crop kembali belum dilabeli');
 }
 
 // ---- Moving between crops ---------------------------------------------------------------------
@@ -167,6 +244,7 @@ $('switch').onclick = (event) => { event.preventDefault(); enqueue(showLogin); }
 $('prev').onclick = () => enqueue(() => show(index - 1));
 $('next').onclick = () => enqueue(() => show(index + 1));
 $('todo').onclick = () => enqueue(nextToDo);
+$('undo').onclick = () => enqueue(undo);
 $('part-field').querySelector('legend').onclick = () => { field = 'part'; render(); };
 $('color-field').querySelector('legend').onclick = () => { field = 'color'; render(); };
 enqueue(showLogin);
