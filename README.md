@@ -44,7 +44,7 @@ Stage 3 starts from Rebrickable's RGB values for the 10 catalogue colors (<https
 - scikit-image 0.26.0 and scikit-learn 1.9.1 for K-Means and CIELAB color matching (stage 3)
 - pandas, matplotlib and Pillow for data exploration
 - Google Colab with a T4 GPU for training
-- [Ruff](https://docs.astral.sh/ruff/) for linting and nbformat for notebook checks
+- [Ruff](https://docs.astral.sh/ruff/) for linting, nbformat for notebook checks and pytest for the labeling tool
 
 ## Setup and run
 
@@ -61,15 +61,39 @@ jupyter lab
 
 The notebook's first cell installs its own dependencies. Outside Colab it writes `data/` and `runs/` next to the notebook, and git ignores both. On a headless Linux server, replace `opencv-python` with `opencv-python-headless` if importing Ultralytics fails on `libGL.so.1`.
 
+## Labeling your own photos
+
+The PRD's part and color targets (at least 85%) are about crops from phone photos, and no public dataset has those. So the team photographs its own bricks, and `tools/labeler` turns the photos into the labeled crops that notebook 02 (section 10) and notebook 03 (section 8.2) read: `data/foto_mandiri/label.csv`, with columns `file,part,color`. Everything runs on your own machine. Photos are never uploaded, and the only download is the detector from release `v0.2.0`.
+
+**Shoot.**
+
+- Aim for about 30 crops of each catalogue part (about 400) plus about 50 pieces outside the catalogue, and at least 30 of each catalogue color plus about 50 in other colors. Each brick counts toward both.
+- Leave space between the bricks in a photo, so each one gets its own box.
+- Vary the background (wooden table, floor, cloth) and the light (daylight by a window, a white lamp, a yellow lamp). Take some photos slightly tilted so the sides show: from straight above, a brick and a plate look alike.
+- Keep one folder per shooting session: `data/foto_mandiri/photos/<session>/`. `label.csv` carries each crop's session, so the crops of one session can stay in the same split.
+- Use JPEG, PNG or WebP. HEIC isn't read, so on an iPhone set *Settings → Camera → Formats* to *Most Compatible*.
+
+**Cut.** Install the tool's requirements once, then cut:
+
+```bash
+pip install -r tools/labeler/requirements.txt
+python -m tools.labeler cut
+```
+
+`cut` downloads `best.pt` from release `v0.2.0` once and checks its SHA-256. It then runs the detector on every photo that isn't cut yet, with the release's settings (`imgsz` 640, `conf` 0.65), after applying the photo's EXIF orientation. Each box is widened exactly as legoin-api and Ultralytics' `save_crop` do, and saved as `crops/<session>/<photo>_<n>.jpg`, numbered top to bottom. `crops/manifest.csv` lists each crop's photo, session, box and detector score. After you add photos, run it again; it skips the photos already cut.
+
+The data root defaults to `notebooks/data/foto_mandiri`, where the notebooks look when they run locally; `--root` picks another folder. Git ignores it, like every `data/` folder. On Colab, upload the folder to `/content/data/foto_mandiri`; the crops and `label.csv` are enough.
+
 ## Checks
 
 ```bash
 pip install -r requirements-dev.txt
 ruff check .
 python scripts/check_repo.py
+python -m pytest tools
 ```
 
-`check_repo.py` fails when a notebook is invalid or still holds outputs, or when data or weights are in the repository. `python scripts/check_repo.py --fix` clears notebook outputs in place. CI runs both commands on every pull request.
+`check_repo.py` fails when a notebook is invalid or still holds outputs, or when data or weights are in the repository. `python scripts/check_repo.py --fix` clears notebook outputs in place. `pytest` runs the labeling tool's tests; the one that compares crops with Ultralytics runs only where `tools/labeler/requirements.txt` is installed. CI runs all three commands on every pull request.
 
 ## Environment variables
 

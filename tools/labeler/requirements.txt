@@ -1,0 +1,7 @@
+# What `python -m tools.labeler cut` needs; `label` and `merge` need only Python 3.12.
+# Ultralytics, torch and torchvision as release v0.2.0 was made and legoin-api runs it.
+ultralytics==8.4.190
+torch==2.15.0
+torchvision==0.29.2
+numpy==2.5.5
+pillow==13.0.0
