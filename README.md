@@ -81,13 +81,14 @@ None by default; the notebooks need no keys or tokens.
 
 ## Model releases
 
-Weights are published as [GitHub Releases](https://github.com/al-dioooo/legoin-ml/releases), never committed. Each release carries the `.pt` file, the training config and the test metrics: mAP@50, mAP@50-95, precision, recall and count MAE for the detector. A part classifier release also carries `legoin_mobilenetv3_part_labels.json`, which gives the class order, input size, normalization and confidence temperature the backend must use, and reports top-1 accuracy with the kind of photos it was measured on. The color step has no weights; its parameters file, `legoin_warna.json`, ships in a release the same way. The backend pins a release tag and predicts with the image size and confidence threshold given in its notes.
+Weights are published as [GitHub Releases](https://github.com/al-dioooo/legoin-ml/releases), never committed. Each release carries the `.pt` file, the training config and the test metrics: mAP@50, mAP@50-95, precision, recall and count MAE for the detector. A part classifier release also carries `legoin_mobilenetv3_part_labels.json`, which gives the class order, input size, normalization and confidence temperature the backend must use, and reports top-1 accuracy with the kind of photos it was measured on. The color step has no weights; its parameters file, `legoin_warna.json`, ships in a release the same way. From v0.2.0, a release carries the files for every stage, so the backend pins one tag and predicts with the settings given in its notes.
 
-| Release | Model | Trained | Test mAP@50 | Test count MAE | `imgsz` | `conf` |
-| --- | --- | --- | --- | --- | --- | --- |
-| [v0.1.0](https://github.com/al-dioooo/legoin-ml/releases/tag/v0.1.0) | YOLO11n, 1 class | 35 epochs on a CPU server, 4.1 h | 0.992 | 0.055 | 640 | 0.65 |
+| Release | Contents | Trained | Test results | Backend settings |
+| --- | --- | --- | --- | --- |
+| [v0.1.0](https://github.com/al-dioooo/legoin-ml/releases/tag/v0.1.0) | Detector: YOLO11n, 1 class | 35 epochs on a CPU server, 4.1 h | mAP@50 0.992, count MAE 0.055 | `imgsz` 640, `conf` 0.65 |
+| [v0.2.0](https://github.com/al-dioooo/legoin-ml/releases/tag/v0.2.0) | v0.1.0's detector, unchanged; part classifier: MobileNetV3-Large, 13 parts plus `other`; color parameters, provisional | Classifier: 15 epochs on a CPU server, 1.8 h | Classifier top-1 97.7% on studio photos, an upper bound; color not yet measured on photos | Detector as in v0.1.0; classifier 224 px letterbox, temperature 0.7493 |
 
-The PRD targets are mAP@50 ≥ 0.85 and a count MAE of at most 1 brick per photo.
+The PRD targets are mAP@50 ≥ 0.85, a count MAE of at most 1 brick per photo, and at least 85% accuracy for parts and for colors on real-photo crops. The classifier's test photos are studio shots, so its number is an upper bound until the team's labeled phone crops exist.
 
 ## Contributing
 
